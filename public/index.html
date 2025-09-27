@@ -112,6 +112,22 @@ function setHomeVisible(v){if(v){hero.classList.remove('hidden');recentWrap.clas
 
 function buildSrc(slug,ep,a,r,transmux){const p=new URLSearchParams();if(a)p.set('audio',a);if(r)p.set('resolution',r);if(transmux)p.set('transmux','1');p.set('sid',sid);return `/watch/${encodeURIComponent(slug)}/${encodeURIComponent(ep)}/master.m3u8?`+p.toString()}
 
+function selectAudioTrackByPref(){
+  if(!hls) return
+  const pref=(audioSel.value||'').toLowerCase()
+  if(!pref) return
+  const tracks=hls.audioTracks||[]
+  if(!tracks.length) return
+  const match=(t)=>{const s=((t.lang||'')+' '+(t.name||'')).toLowerCase()
+    if(pref==='eng'||pref==='en'||pref==='english') return /(^|[^a-z])(en|eng|english)([^a-z]|$)/.test(s)
+    if(pref==='jpn'||pref==='jp'||pref==='japanese') return /(^|[^a-z])(jp|jpn|japanese)([^a-z]|$)/.test(s)
+    return false}
+  let idx=tracks.findIndex(match)
+  if(idx<0&&pref==='eng'){idx=tracks.findIndex(t=>/en/.test((t.lang||'').toLowerCase()))}
+  if(idx<0&&pref==='jpn'){idx=tracks.findIndex(t=>/jp|ja/.test((t.lang||'').toLowerCase()))}
+  if(idx>=0){ hls.audioTrack = tracks[idx].id ?? idx }
+}
+
 function attachHls(src,startAt=0){
   resetVideo();destroyHls()
   if(Hls.isSupported()){
@@ -131,7 +147,9 @@ function attachHls(src,startAt=0){
       fragLoadTimeout:120000,
       capLevelToPlayerSize:true
     })
-    hls.on(Hls.Events.MANIFEST_PARSED,()=>{try{video.currentTime=0}catch{}})
+    hls.on(Hls.Events.MANIFEST_PARSED,()=>{try{video.currentTime=0}catch{};selectAudioTrackByPref()})
+    hls.on(Hls.Events.AUDIO_TRACKS_UPDATED,selectAudioTrackByPref)
+    hls.on(Hls.Events.AUDIO_TRACK_SWITCHED,()=>{})
     video.addEventListener('loadedmetadata',()=>{try{video.currentTime=startAt||0}catch{}},{once:true})
     hls.on(Hls.Events.ERROR,(_e,d)=>{
       if(d.fatal){
@@ -139,13 +157,6 @@ function attachHls(src,startAt=0){
         else if(d.type==='mediaError'){hls.recoverMediaError()}
       }else{
         if(d.details==='bufferStalledError'){hls.startLoad()}
-      }
-    })
-    hls.on(Hls.Events.BUFFER_CODECS,(_e,d)=>{
-      const ac=(d.audio?.codec||d.audio?.levelCodec||'').toLowerCase()
-      if((ac.includes('mp4a.40.1')||(!ac.includes('mp4a.40.2')&&ac.includes('mp4a.40'))) ){
-        const a=audioSel.value||'';const r=resSel.value||'';const u=buildSrc(current.slug,current.playingEp,a,r,true)
-        destroyHls();setTimeout(()=>attachHls(u,0),200)
       }
     })
     hls.loadSource(src)
@@ -253,13 +264,20 @@ function playEp(epNum,startAt){
   titleEl.textContent=`${current.title} — Episode ${epNum}`
   newSid()
   const a=audioSel.value||'';const r=resSel.value||''
-  const direct=buildSrc(current.slug,epNum,a,r,false)
-  attachHls(direct,startAt||0)
+  const src=buildSrc(current.slug,epNum,a,r,false)
+  attachHls(src,startAt||0)
   video.play().catch(()=>{})
 }
 
-audioSel.addEventListener('change',async()=>{if(!current||!current.playingEp)return;await populateSelectors(current.slug,current.playingEp);playEp(current.playingEp,0)})
+audioSel.addEventListener('change',()=>{
+  if(hls && (hls.audioTracks||[]).length){
+    selectAudioTrackByPref()
+  }else if(current&&current.playingEp){
+    playEp(current.playingEp,Math.max(0,video.currentTime||0))
+  }
+})
 resSel.addEventListener('change',()=>{if(!current||!current.playingEp)return;playEp(current.playingEp,0)})
+
 video.addEventListener('timeupdate',()=>{if(!current)return;if(Math.floor(video.currentTime)%10===0)saveProgress()})
 video.addEventListener('ended',()=>{
   if(!current||!eps.length)return
