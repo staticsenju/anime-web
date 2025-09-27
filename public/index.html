@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>anime-web</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<style>
+:root{--bg:#0e0f13;--panel:#12141a;--muted:#8f96a3;--fg:#e9edf3;--primary:#7c5cff;--primary-2:#5fc3ff;--card:#151822;--ring:0 0 0 6px rgba(124,92,255,.1)}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,sans-serif}
+a{color:inherit}
+.container{max-width:1200px;margin:0 auto;padding:24px}
+.hero{min-height:60vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;text-align:center}
+.hero h1{font-size:clamp(28px,6vw,48px);margin:0;background:linear-gradient(90deg,var(--primary),var(--primary-2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.searchbar{display:flex;gap:8px;align-items:center;padding:8px;background:#171a23;border:1px solid #232838;border-radius:14px;box-shadow:var(--ring)}
+.searchbar input{width:min(70vw,520px);padding:14px 16px;background:#11141b;border:1px solid #232838;color:var(--fg);border-radius:10px;outline:none}
+.searchbar button{padding:12px 18px;background:var(--primary);color:#fff;font-weight:700;border:none;border-radius:10px;cursor:pointer}
+.section{padding:8px 0 24px}
+.section h2{font-size:18px;color:var(--muted);margin:8px 0 12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px}
+.card{position:relative;background:var(--card);border:1px solid #232838;border-radius:12px;overflow:hidden;cursor:pointer;min-height:220px}
+.card img{width:100%;height:100%;object-fit:cover;display:block;filter:brightness(.95);transition:.25s filter}
+.card .overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;padding:8px;text-align:center;opacity:0;transition:.25s opacity}
+.card:hover img{filter:brightness(.4) blur(2px)}
+.card:hover .overlay{opacity:1;text-shadow:0 2px 10px rgba(0,0,0,.6)}
+.player{margin-top:8px;background:var(--panel);border:1px solid #232838;border-radius:14px;padding:12px}
+video{width:100%;max-height:64vh;background:#000;border-radius:10px}
+.controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+select,button{padding:8px 10px;background:#161a22;color:#fff;border:1px solid #232838;border-radius:8px}
+button.primary{background:var(--primary);color:#fff;border:none}
+.toggle{padding:8px 10px;border:1px solid #232838;border-radius:8px;background:#161a22;color:#fff;cursor:pointer}
+.hidden{display:none}
+.epgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:12px}
+.epcard{position:relative;border:1px solid #232838;background:#12141a;border-radius:10px;overflow:hidden;cursor:pointer}
+.epcard img{width:100%;height:100px;object-fit:cover;display:block}
+.epcard .label{position:absolute;bottom:6px;left:6px;right:6px;font-size:12px;background:rgba(0,0,0,.55);color:#fff;padding:3px 6px;border-radius:6px}
+.epcard .filler{position:absolute;top:6px;right:6px;font-size:11px;background:#b91c1c;color:#fff;padding:2px 6px;border-radius:6px}
+.recent-row{display:grid;grid-auto-flow:column;grid-auto-columns:150px;gap:12px;overflow-x:auto;padding-bottom:6px}
+.recent-row::-webkit-scrollbar{height:8px}
+.recent-row::-webkit-scrollbar-thumb{background:#232838;border-radius:8px}
+.recentcard{position:relative;border:1px solid #232838;background:#12141a;border-radius:10px;overflow:hidden;cursor:pointer;height:120px}
+.recentcard img{width:100%;height:100px;object-fit:cover;display:block}
+.recentcard .label{position:absolute;bottom:6px;left:6px;right:6px;font-size:12px;background:rgba(0,0,0,.55);color:#fff;padding:3px 6px;border-radius:6px}
+.muted{color:var(--muted);font-size:14px}
+</style>
+</head>
+<body>
+<div class="container">
+  <section class="hero" id="hero">
+    <h1>welcome to anime-web</h1>
+    <div class="searchbar">
+      <input id="q" placeholder="Search for any anime!" />
+      <button id="search">Go</button>
+    </div>
+  </section>
+  <section class="section" id="recentWrap">
+    <h2>Continue watching</h2>
+    <div id="recent" class="recent-row"></div>
+    <div id="recentEmpty" class="muted">No history yet.</div>
+  </section>
+  <section class="section">
+    <div id="results" class="grid"></div>
+  </section>
+  <section id="watch" class="section hidden">
+    <div class="player">
+      <video id="video" controls playsinline></video>
+      <div class="controls">
+        <select id="audio"></select>
+        <select id="res"></select>
+        <button id="resume" class="primary hidden">Resume</button>
+        <button id="skipFillers" class="toggle">Skip fillers: Off</button>
+      </div>
+    </div>
+    <div style="margin-top:12px" class="muted" id="title"></div>
+    <div id="episodes" class="epgrid"></div>
+  </section>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<script>
+const q=document.getElementById('q')
+const searchBtn=document.getElementById('search')
+const results=document.getElementById('results')
+const hero=document.getElementById('hero')
+const recentWrap=document.getElementById('recentWrap')
+const recentRow=document.getElementById('recent')
+const recentEmpty=document.getElementById('recentEmpty')
+const watchSec=document.getElementById('watch')
+const video=document.getElementById('video')
+const audioSel=document.getElementById('audio')
+const resSel=document.getElementById('res')
+const resumeBtn=document.getElementById('resume')
+const skipBtn=document.getElementById('skipFillers')
+const titleEl=document.getElementById('title')
+const epGrid=document.getElementById('episodes')
+
+let hls=null
+let sid=''
+let current=null
+let eps=[]
+let skipFillers=localStorage.getItem('ap_skip_fillers')==='1'
+
+function updateSkipUI(){ skipBtn.textContent = 'Skip fillers: ' + (skipFillers?'On':'Off') }
+updateSkipUI()
+skipBtn.onclick=()=>{ skipFillers=!skipFillers; localStorage.setItem('ap_skip_fillers', skipFillers?'1':'0'); updateSkipUI() }
+
+function newSid(){sid=Date.now().toString(36)+Math.random().toString(36).slice(2)}
+function resetVideo(){try{video.pause()}catch{}video.removeAttribute('src');video.load()}
+function destroyHls(){if(hls){try{hls.destroy()}catch{}hls=null}}
+function setHomeVisible(v){if(v){hero.classList.remove('hidden');recentWrap.classList.remove('hidden')}else{hero.classList.add('hidden');recentWrap.classList.add('hidden')}}
+
+function buildSrc(slug,ep,a,r,transmux){const p=new URLSearchParams();if(a)p.set('audio',a);if(r)p.set('resolution',r);if(transmux)p.set('transmux','1');p.set('sid',sid);return `/watch/${encodeURIComponent(slug)}/${encodeURIComponent(ep)}/master.m3u8?`+p.toString()}
+
+function attachHls(src,startAt=0){
+  resetVideo();destroyHls()
+  if(Hls.isSupported()){
+    hls=new Hls({
+      debug:false,
+      enableWorker:true,
+      lowLatencyMode:false,
+      startPosition:0,
+      autoStartLoad:true,
+      liveDurationInfinity:true,
+      liveSyncDurationCount:3,
+      liveMaxLatencyDurationCount:10,
+      maxBufferLength:180,
+      backBufferLength:30,
+      startFragPrefetch:true,
+      manifestLoadTimeout:120000,
+      fragLoadTimeout:120000,
+      capLevelToPlayerSize:true
+    })
+    hls.on(Hls.Events.MANIFEST_PARSED,()=>{try{video.currentTime=0}catch{}})
+    video.addEventListener('loadedmetadata',()=>{try{video.currentTime=startAt||0}catch{}},{once:true})
+    hls.on(Hls.Events.ERROR,(_e,d)=>{
+      if(d.fatal){
+        if(d.type==='networkError'){hls.startLoad()}
+        else if(d.type==='mediaError'){hls.recoverMediaError()}
+      }else{
+        if(d.details==='bufferStalledError'){hls.startLoad()}
+      }
+    })
+    hls.on(Hls.Events.BUFFER_CODECS,(_e,d)=>{
+      const ac=(d.audio?.codec||d.audio?.levelCodec||'').toLowerCase()
+      if((ac.includes('mp4a.40.1')||(!ac.includes('mp4a.40.2')&&ac.includes('mp4a.40'))) ){
+        const a=audioSel.value||'';const r=resSel.value||'';const u=buildSrc(current.slug,current.playingEp,a,r,true)
+        destroyHls();setTimeout(()=>attachHls(u,0),200)
+      }
+    })
+    hls.loadSource(src)
+    hls.attachMedia(video)
+  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src=src
+  }
+}
+
+function renderRecent(){
+  const list=JSON.parse(localStorage.getItem('ap_recent')||'[]')
+  recentRow.innerHTML=''
+  if(!list.length){recentEmpty.classList.remove('hidden');return}
+  recentEmpty.classList.add('hidden')
+  list.sort((a,b)=>b.updatedAt-a.updatedAt)
+  list.forEach(item=>{
+    const d=document.createElement('div');d.className='recentcard'
+    const img=document.createElement('img');img.loading='lazy';img.src=item.poster?`/img?url=${encodeURIComponent(item.poster)}`:''
+    const lbl=document.createElement('div');lbl.className='label';lbl.textContent=item.title||item.slug
+    const badge=document.createElement('div');badge.className='label';badge.style.bottom='auto';badge.style.top='6px';badge.textContent=`E${item.lastEp}`
+    d.append(img,lbl,badge)
+    d.onclick=()=>loadAnime(item.slug,true,item.lastEp,item.lastTime||0)
+    recentRow.append(d)
+  })
+}
+function upsertRecent({slug,title,poster,ep,time}){const list=JSON.parse(localStorage.getItem('ap_recent')||'[]');const idx=list.findIndex(x=>x.slug===slug);const entry={slug,title,poster,lastEp:ep,lastTime:time||0,updatedAt:Date.now()};if(idx>=0)list[idx]={...list[idx],...entry};else list.unshift(entry);localStorage.setItem('ap_recent',JSON.stringify(list.slice(0,50)))}
+function saveProgress(){if(!current||!current.playingEp)return;const key=`ap_prog:${current.slug}`;const data={ep:current.playingEp,t:Math.floor(video.currentTime||0)};localStorage.setItem(key,JSON.stringify(data));upsertRecent({slug:current.slug,title:current.title,poster:current.poster,ep:current.playingEp,time:data.t})}
+function getProgress(slug){try{return JSON.parse(localStorage.getItem(`ap_prog:${slug}`)||'null')}catch{return null}}
+async function api(url){const r=await fetch(url);if(!r.ok)throw new Error('api');return await r.json()}
+
+async function doSearch(){
+  const s=q.value.trim();if(!s)return
+  const data=await api(`/api/search?q=${encodeURIComponent(s)}`)
+  const list=(data.data||[])
+  results.innerHTML=''
+  setHomeVisible(false)
+  watchSec.classList.add('hidden')
+  for(const it of list){
+    const card=document.createElement('div');card.className='card'
+    const img=document.createElement('img');img.loading='lazy'
+    const ov=document.createElement('div');ov.className='overlay';ov.textContent=it.title||it.title_english||it.title_japanese||'Unknown'
+    card.append(img,ov)
+    results.append(card)
+    try{
+      const meta=await api(`/api/anime/${encodeURIComponent(it.session)}/meta`)
+      if(meta.poster){img.src=`/img?url=${encodeURIComponent(meta.poster)}`}else{img.src=''}
+      card.dataset.slug=it.session
+      card.dataset.title=meta.title||(it.title||'Unknown')
+      card.dataset.poster=meta.poster||''
+    }catch{
+      card.dataset.slug=it.session
+      card.dataset.title=it.title||'Unknown'
+      card.dataset.poster=''
+    }
+    card.onclick=()=>loadAnime(card.dataset.slug,false,null,0,card.dataset.title,card.dataset.poster)
+  }
+}
+
+async function loadAnime(slug,fromRecent=false,resumeEp=null,resumeTime=0,givenTitle='',givenPoster=''){
+  let title=givenTitle,poster=givenPoster
+  if(!title){try{const meta=await api(`/api/anime/${encodeURIComponent(slug)}/meta`);title=meta.title;poster=meta.poster}catch{}}
+  current={slug,title:title||slug,poster:poster||''}
+  document.title=`${current.title} - anime-web`
+  const epData=await api(`/api/anime/${encodeURIComponent(slug)}/episodes`)
+  eps=(epData.data||[])
+  setHomeVisible(false)
+  watchSec.classList.remove('hidden')
+  results.innerHTML=''
+  epGrid.innerHTML=''
+  for(const e of eps){
+    const d=document.createElement('div');d.className='epcard'
+    const img=document.createElement('img');img.loading='lazy'
+    const snap=e.snapshot||''
+    img.src=snap?`/img?url=${encodeURIComponent(snap)}`:''
+    const lbl=document.createElement('div');lbl.className='label';lbl.textContent=`Episode ${e.episode}`
+    d.append(img,lbl)
+    if(Number(e.filler)===1){const f=document.createElement('div');f.className='filler';f.textContent='filler';d.append(f)}
+    d.onclick=()=>playEp(Number(e.episode),0)
+    epGrid.append(d)
+  }
+  let firstEp=resumeEp||(eps.length?Number(eps[0].episode):1)
+  await populateSelectors(slug,firstEp)
+  const prog=getProgress(slug)
+  if((fromRecent&&resumeEp)||(prog&&prog.ep)){
+    resumeBtn.classList.remove('hidden')
+    resumeBtn.onclick=()=>playEp(fromRecent?resumeEp:prog.ep,fromRecent?resumeTime:prog.t)
+  }else{
+    resumeBtn.classList.add('hidden')
+  }
+  if(fromRecent&&resumeEp)playEp(resumeEp,resumeTime);else playEp(firstEp,0)
+}
+
+async function populateSelectors(slug,episode){
+  const o=await api(`/api/options/${encodeURIComponent(slug)}/${encodeURIComponent(episode)}`)
+  const opts=o.options||[]
+  const auds=[...new Set(opts.map(x=>x.audio).filter(Boolean))]
+  const ress=[...new Set(opts.map(x=>x.resolution).filter(Boolean))].sort((a,b)=>Number(b)-Number(a))
+  audioSel.innerHTML='';resSel.innerHTML=''
+  audioSel.append(new Option('Audio: Auto',''));auds.forEach(a=>audioSel.append(new Option(a,a)))
+  resSel.append(new Option('Res: Auto',''));ress.forEach(r=>resSel.append(new Option(r,r)))
+}
+
+function playEp(epNum,startAt){
+  current.playingEp=epNum
+  titleEl.textContent=`${current.title} — Episode ${epNum}`
+  newSid()
+  const a=audioSel.value||'';const r=resSel.value||''
+  const direct=buildSrc(current.slug,epNum,a,r,false)
+  attachHls(direct,startAt||0)
+  video.play().catch(()=>{})
+}
+
+audioSel.addEventListener('change',async()=>{if(!current||!current.playingEp)return;await populateSelectors(current.slug,current.playingEp);playEp(current.playingEp,0)})
+resSel.addEventListener('change',()=>{if(!current||!current.playingEp)return;playEp(current.playingEp,0)})
+video.addEventListener('timeupdate',()=>{if(!current)return;if(Math.floor(video.currentTime)%10===0)saveProgress()})
+video.addEventListener('ended',()=>{
+  if(!current||!eps.length)return
+  let idx=eps.findIndex(e=>Number(e.episode)===Number(current.playingEp))
+  let nextIdx=idx+1
+  while(skipFillers && nextIdx<eps.length && Number(eps[nextIdx].filler)===1){ nextIdx++ }
+  if(nextIdx<eps.length){ playEp(Number(eps[nextIdx].episode),0) }
+})
+
+searchBtn.onclick=doSearch
+q.addEventListener('keydown',(e)=>{if(e.key==='Enter')doSearch()})
+setHomeVisible(true)
+renderRecent()
+</script>
+</body>
+</html>
