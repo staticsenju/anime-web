@@ -2,6 +2,8 @@
 
 A lightweight web app to search, browse, and stream anime with HLS playback, audio/resolution selection, episode cards with snapshots, continue-watching history, and optional transmux fallback via ffmpeg.
 
+![anime-web](staticsenjju.png "Home screen")
+
 ## Features
 
 - Home screen with search and “Continue watching”
