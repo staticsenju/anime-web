@@ -222,6 +222,7 @@ function rewritePlaylist(content, base, token) {
   const out = []
   let pendingStreamInf = null
   let skipNextImageUri = false
+  const isM3U8 = (u) => /\.m3u8(\?|$)/i.test(u)
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
@@ -247,7 +248,6 @@ function rewritePlaylist(content, base, token) {
       if (isAv1) pendingStreamInf = { drop: true }
       continue
     }
-
     if (pendingStreamInf) {
       if (pendingStreamInf.drop) { pendingStreamInf = null; continue }
       const tag = pendingStreamInf
@@ -289,17 +289,45 @@ function rewritePlaylist(content, base, token) {
       continue
     }
 
+    if (line.startsWith('#EXT-X-PART')) {
+      const m = line.match(/URI="([^"]+)"/)
+      if (m) {
+        const abs = absUrl(m[1], base)
+        const prox = `/proxy/segment?token=${encodeURIComponent(token)}&url=${encodeURIComponent(abs)}&ref=${encodeURIComponent(base)}`
+        out.push(line.replace(m[1], prox))
+      } else out.push(line)
+      continue
+    }
+
+    if (line.startsWith('#EXT-X-PRELOAD-HINT')) {
+      const m = line.match(/URI="([^"]+)"/)
+      if (m) {
+        const abs = absUrl(m[1], base)
+        const prox = `/proxy/segment?token=${encodeURIComponent(token)}&url=${encodeURIComponent(abs)}&ref=${encodeURIComponent(base)}`
+        out.push(line.replace(m[1], prox))
+      } else out.push(line)
+      continue
+    }
+
+    if (line.startsWith('#EXT-X-RENDITION-REPORT')) {
+      const m = line.match(/URI="([^"]+)"/)
+      if (m) {
+        const abs = absUrl(m[1], base)
+        const prox = `/proxy/playlist?token=${encodeURIComponent(token)}&url=${encodeURIComponent(abs)}&ref=${encodeURIComponent(base)}`
+        out.push(line.replace(m[1], prox))
+      } else out.push(line)
+      continue
+    }
+
     if (line.startsWith('#EXT-X-MEDIA')) {
       const m = line.match(/URI="([^"]+)"/)
       if (m) {
         const abs = absUrl(m[1], base)
-        const prox = /\.m3u8(\?|$)/i.test(abs)
+        const prox = isM3U8(abs)
           ? `/proxy/playlist?token=${encodeURIComponent(token)}&url=${encodeURIComponent(abs)}&ref=${encodeURIComponent(base)}`
           : `/proxy/segment?token=${encodeURIComponent(token)}&url=${encodeURIComponent(abs)}&ref=${encodeURIComponent(base)}`
         out.push(line.replace(m[1], prox))
-      } else {
-        out.push(line)
-      }
+      } else out.push(line)
       continue
     }
 
@@ -307,15 +335,12 @@ function rewritePlaylist(content, base, token) {
     if (!line.trim()) { out.push(line); continue }
 
     const abs = absUrl(line.trim(), base)
-    if (/\.m3u8(\?|$)/i.test(abs)) {
-      const prox = `/proxy/playlist?token=${encodeURIComponent(token)}&url=${encodeURIComponent(abs)}&ref=${encodeURIComponent(base)}`
-      out.push(prox)
+    if (isM3U8(abs)) {
+      out.push(`/proxy/playlist?token=${encodeURIComponent(token)}&url=${encodeURIComponent(abs)}&ref=${encodeURIComponent(base)}`)
     } else {
-      const prox = `/proxy/segment?token=${encodeURIComponent(token)}&url=${encodeURIComponent(abs)}&ref=${encodeURIComponent(base)}`
-      out.push(prox)
+      out.push(`/proxy/segment?token=${encodeURIComponent(token)}&url=${encodeURIComponent(abs)}&ref=${encodeURIComponent(base)}`)
     }
   }
-
   return out.join('\n')
 }
 function pipeFetchResponse(r, res, urlForDebug) {
