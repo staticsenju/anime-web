@@ -221,9 +221,25 @@ function rewritePlaylist(content, base, token) {
   const lines = content.split('\n')
   const out = []
   let pendingStreamInf = null
+  let skipNextImageUri = false
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
-    if (line.startsWith('#EXT-X-IMAGE-STREAM-INF')) { continue }
+
+    if (skipNextImageUri) {
+      if (!line.startsWith('#') && line.trim()) {
+        skipNextImageUri = false
+        continue
+      }
+      out.push(line)
+      continue
+    }
+
+    if (line.startsWith('#EXT-X-IMAGE-STREAM-INF')) {
+      skipNextImageUri = true
+      continue
+    }
+
     if (line.startsWith('#EXT-X-STREAM-INF')) {
       pendingStreamInf = line
       const lower = line.toLowerCase()
@@ -231,6 +247,7 @@ function rewritePlaylist(content, base, token) {
       if (isAv1) pendingStreamInf = { drop: true }
       continue
     }
+
     if (pendingStreamInf) {
       if (pendingStreamInf.drop) { pendingStreamInf = null; continue }
       const tag = pendingStreamInf
@@ -241,6 +258,7 @@ function rewritePlaylist(content, base, token) {
       pendingStreamInf = null
       continue
     }
+
     if (line.startsWith('#EXT-X-I-FRAME-STREAM-INF')) {
       const m = line.match(/URI="([^"]+)"/)
       if (m) {
@@ -250,6 +268,7 @@ function rewritePlaylist(content, base, token) {
       } else out.push(line)
       continue
     }
+
     if (line.startsWith('#EXT-X-MAP')) {
       const m = line.match(/URI="([^"]+)"/)
       if (m) {
@@ -259,6 +278,7 @@ function rewritePlaylist(content, base, token) {
       } else out.push(line)
       continue
     }
+
     if (line.startsWith('#EXT-X-KEY')) {
       const m = line.match(/URI="([^"]+)"/)
       if (m) {
@@ -268,23 +288,25 @@ function rewritePlaylist(content, base, token) {
       } else out.push(line)
       continue
     }
+
     if (line.startsWith('#EXT-X-MEDIA')) {
       const m = line.match(/URI="([^"]+)"/)
       if (m) {
         const abs = absUrl(m[1], base)
-        const isImage = /\.(jpg|jpeg|png)(\?|$)/i.test(abs)
-        if (isImage) { continue }
         const prox = /\.m3u8(\?|$)/i.test(abs)
           ? `/proxy/playlist?token=${encodeURIComponent(token)}&url=${encodeURIComponent(abs)}&ref=${encodeURIComponent(base)}`
           : `/proxy/segment?token=${encodeURIComponent(token)}&url=${encodeURIComponent(abs)}&ref=${encodeURIComponent(base)}`
         out.push(line.replace(m[1], prox))
-      } else out.push(line)
+      } else {
+        out.push(line)
+      }
       continue
     }
+
     if (line.startsWith('#')) { out.push(line); continue }
     if (!line.trim()) { out.push(line); continue }
+
     const abs = absUrl(line.trim(), base)
-    if (/\.(jpg|jpeg|png)(\?|$)/i.test(abs)) { continue }
     if (/\.m3u8(\?|$)/i.test(abs)) {
       const prox = `/proxy/playlist?token=${encodeURIComponent(token)}&url=${encodeURIComponent(abs)}&ref=${encodeURIComponent(base)}`
       out.push(prox)
@@ -293,6 +315,7 @@ function rewritePlaylist(content, base, token) {
       out.push(prox)
     }
   }
+
   return out.join('\n')
 }
 function pipeFetchResponse(r, res, urlForDebug) {
