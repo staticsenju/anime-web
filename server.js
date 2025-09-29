@@ -589,10 +589,23 @@ app.get('/proxy/segment', async (req, res) => {
     const theurl = String(req.query.url || '')
     const ref = String(req.query.ref || '')
     const t = getToken(token)
-    if (!t) return res.status(403).send('forbidden')
-    const r = await httpGetRaw(theurl, { headers: mergeHeaders(buildUpstreamHeaders({ cookie: t.cookie, ref, req })), redirect: 'follow' })
+    if (!t) return res.status(403).end()
+
+    const ac = new AbortController()
+    const onClose = () => { try { ac.abort() } catch {} }
+    req.on('close', onClose)
+    res.on('close', onClose)
+
+    const r = await fetch(theurl, {
+      headers: mergeHeaders(buildUpstreamHeaders({ cookie: t.cookie, ref, req })),
+      redirect: 'follow',
+      signal: ac.signal
+    })
+
     pipeFetchResponse(r, res, theurl)
-  } catch { res.status(500).end() }
+  } catch {
+    if (!res.headersSent) res.status(500).end()
+  }
 })
 app.get('/proxy/key', async (req, res) => {
   try {
