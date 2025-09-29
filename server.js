@@ -223,6 +223,7 @@ function rewritePlaylist(content, base, token) {
   let pendingStreamInf = null
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
+    if (line.startsWith('#EXT-X-IMAGE-STREAM-INF')) { continue }
     if (line.startsWith('#EXT-X-STREAM-INF')) {
       pendingStreamInf = line
       const lower = line.toLowerCase()
@@ -271,7 +272,9 @@ function rewritePlaylist(content, base, token) {
       const m = line.match(/URI="([^"]+)"/)
       if (m) {
         const abs = absUrl(m[1], base)
-        const prox = shouldProxyAsPlaylist(abs)
+        const isImage = /\.(jpg|jpeg|png)(\?|$)/i.test(abs)
+        if (isImage) { continue }
+        const prox = /\.m3u8(\?|$)/i.test(abs)
           ? `/proxy/playlist?token=${encodeURIComponent(token)}&url=${encodeURIComponent(abs)}&ref=${encodeURIComponent(base)}`
           : `/proxy/segment?token=${encodeURIComponent(token)}&url=${encodeURIComponent(abs)}&ref=${encodeURIComponent(base)}`
         out.push(line.replace(m[1], prox))
@@ -281,7 +284,8 @@ function rewritePlaylist(content, base, token) {
     if (line.startsWith('#')) { out.push(line); continue }
     if (!line.trim()) { out.push(line); continue }
     const abs = absUrl(line.trim(), base)
-    if (shouldProxyAsPlaylist(abs)) {
+    if (/\.(jpg|jpeg|png)(\?|$)/i.test(abs)) { continue }
+    if (/\.m3u8(\?|$)/i.test(abs)) {
       const prox = `/proxy/playlist?token=${encodeURIComponent(token)}&url=${encodeURIComponent(abs)}&ref=${encodeURIComponent(base)}`
       out.push(prox)
     } else {
@@ -291,7 +295,6 @@ function rewritePlaylist(content, base, token) {
   }
   return out.join('\n')
 }
-
 function pipeFetchResponse(r, res, urlForDebug) {
   const copy = (h) => { const v = r.headers.get(h); if (v) res.setHeader(h, v) }
   res.setHeader('X-Upstream-Status', String(r.status))
