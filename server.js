@@ -305,6 +305,7 @@ function pipeFetchResponse(r, res, urlForDebug) {
   copy('content-encoding')
   res.removeHeader('Content-Length')
   res.status(r.status)
+  if (typeof res.flushHeaders === 'function') { try { res.flushHeaders() } catch {} }
   if (!r.body) return res.end()
   if (Readable.fromWeb) {
     const s = Readable.fromWeb(r.body)
@@ -579,6 +580,7 @@ app.get('/proxy/playlist', async (req, res) => {
     const onClose = () => { try { ac.abort() } catch {} }
     req.on('close', onClose)
     res.on('close', onClose)
+    res.setHeader('Cache-Control', 'no-store')
 
     const r = await httpGetRaw(url, {
       headers: mergeHeaders(buildUpstreamHeaders({ cookie: t.cookie, ref, req })),
@@ -591,8 +593,10 @@ app.get('/proxy/playlist', async (req, res) => {
     res.setHeader('X-Upstream-Status', String(r.status))
     res.setHeader('X-Upstream-CT', r.headers.get('content-type') || '')
     res.setHeader('X-Upstream-URL', url)
+    if (typeof res.flushHeaders === 'function') { try { res.flushHeaders() } catch {} }
     res.status(r.status).send(rewritten)
-  } catch {
+  } catch (err) {
+    if (err && (err.name === 'AbortError' || err.code === 'ECONNRESET')) return
     res.status(500).send('error')
   }
 })
@@ -608,16 +612,18 @@ app.get('/proxy/segment', async (req, res) => {
     const onClose = () => { try { ac.abort() } catch {} }
     req.on('close', onClose)
     res.on('close', onClose)
+    res.setHeader('Cache-Control', 'no-store')
 
-    const r = await fetch(theurl, {
+    const r = await httpGetRaw(theurl, {
       headers: mergeHeaders(buildUpstreamHeaders({ cookie: t.cookie, ref, req })),
       redirect: 'follow',
       signal: ac.signal
     })
 
     pipeFetchResponse(r, res, theurl)
-  } catch {
-    if (!res.headersSent) res.status(500).end()
+  } catch (err) {
+    if (err && (err.name === 'AbortError' || err.code === 'ECONNRESET')) return
+    if (!res.headersSent) res.status(499).end()
   }
 })
 app.get('/proxy/key', async (req, res) => {
@@ -632,6 +638,7 @@ app.get('/proxy/key', async (req, res) => {
     const onClose = () => { try { ac.abort() } catch {} }
     req.on('close', onClose)
     res.on('close', onClose)
+    res.setHeader('Cache-Control', 'no-store')
 
     const r = await httpGetRaw(url, {
       headers: mergeHeaders(buildUpstreamHeaders({ cookie: t.cookie, ref, req })),
@@ -639,7 +646,8 @@ app.get('/proxy/key', async (req, res) => {
       signal: ac.signal
     })
     pipeFetchResponse(r, res, url)
-  } catch {
+  } catch (err) {
+    if (err && (err.name === 'AbortError' || err.code === 'ECONNRESET')) return
     res.status(500).end()
   }
 })
