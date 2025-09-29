@@ -376,7 +376,8 @@ function ensureTransmuxStart(m3u8Url, lang, reso) {
       '-hls_time','3',
       '-hls_list_size','0',
       '-hls_segment_type','fmp4',
-      '-hls_flags','append_list+independent_segments+omit_endlist+temp_file',
+      '-hls_flags','append_list+independent_segments+omit_endlist+temp_file+delete_segments',
+      '-hls_delete_threshold','1',
       '-hls_playlist_type','event',
       '-hls_segment_filename', path.join(outDir,'seg-%04d.m4s'),
       '-master_pl_name','master.m3u8',
@@ -573,7 +574,17 @@ app.get('/proxy/playlist', async (req, res) => {
     const ref = String(req.query.ref || '')
     const t = getToken(token)
     if (!t) return res.status(403).send('forbidden')
-    const r = await httpGetRaw(url, { headers: mergeHeaders(buildUpstreamHeaders({ cookie: t.cookie, ref, req })), redirect: 'follow' })
+
+    const ac = new AbortController()
+    const onClose = () => { try { ac.abort() } catch {} }
+    req.on('close', onClose)
+    res.on('close', onClose)
+
+    const r = await httpGetRaw(url, {
+      headers: mergeHeaders(buildUpstreamHeaders({ cookie: t.cookie, ref, req })),
+      redirect: 'follow',
+      signal: ac.signal
+    })
     const text = await r.text()
     const rewritten = rewritePlaylist(text, url, token)
     res.setHeader('Content-Type', 'application/vnd.apple.mpegurl')
@@ -581,7 +592,9 @@ app.get('/proxy/playlist', async (req, res) => {
     res.setHeader('X-Upstream-CT', r.headers.get('content-type') || '')
     res.setHeader('X-Upstream-URL', url)
     res.status(r.status).send(rewritten)
-  } catch { res.status(500).send('error') }
+  } catch {
+    res.status(500).send('error')
+  }
 })
 app.get('/proxy/segment', async (req, res) => {
   try {
@@ -614,11 +627,22 @@ app.get('/proxy/key', async (req, res) => {
     const ref = String(req.query.ref || '')
     const t = getToken(token)
     if (!t) return res.status(403).send('forbidden')
-    const r = await httpGetRaw(url, { headers: mergeHeaders(buildUpstreamHeaders({ cookie: t.cookie, ref, req })), redirect: 'follow' })
-    pipeFetchResponse(r, res, url)
-  } catch { res.status(500).end() }
-})
 
+    const ac = new AbortController()
+    const onClose = () => { try { ac.abort() } catch {} }
+    req.on('close', onClose)
+    res.on('close', onClose)
+
+    const r = await httpGetRaw(url, {
+      headers: mergeHeaders(buildUpstreamHeaders({ cookie: t.cookie, ref, req })),
+      redirect: 'follow',
+      signal: ac.signal
+    })
+    pipeFetchResponse(r, res, url)
+  } catch {
+    res.status(500).end()
+  }
+})
 app.get('/favicon.ico', (req, res) => res.status(204).end())
 app.get('/health', (req, res) => res.json({ ok: true, time: Date.now() }))
 
