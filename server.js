@@ -656,18 +656,18 @@ app.get("/proxy/transcode", (req, res) => {
 
   res.setHeader("Content-Type", "application/vnd.apple.mpegurl");
 
-  const ffmpeg = spawn("ffmpeg", [
-    "-i", url,
-    "-c:v", "copy",
-    "-c:a", "aac",
-    "-ar", "48000"
-    "-ac", "2",
-    "-f", "hls",
-    "-hls_time", "10",       
-    "-hls_list_size", "0",
-    "-hls_flags", "independent_segments",
-    "pipe:1"
-  ]);
+const ffmpeg = spawn("ffmpeg", [
+  "-i", url,
+  "-c:v", "copy",
+  "-c:a", "aac",
+  "-ar", "48000",
+  "-ac", "2",
+  "-f", "hls",
+  "-hls_time", "10",
+  "-hls_list_size", "0",
+  "-hls_flags", "independent_segments",
+  "pipe:1"
+]);
 
   ffmpeg.stdout.pipe(res);
   ffmpeg.stderr.on("data", (d) => console.error("[ffmpeg]", d.toString()));
