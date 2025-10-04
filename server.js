@@ -637,8 +637,13 @@ app.get('/proxy/playlist', async (req, res) => {
       redirect: 'follow',
       signal: ac.signal
     })
-    const text = await r.text()
+
+    let text = await r.text()
+
+    text = text.replace(/mp4a\.40\.1/g, 'mp4a.40.2')
+
     const rewritten = rewritePlaylist(text, url, token)
+
     res.setHeader('Content-Type', 'application/vnd.apple.mpegurl')
     res.setHeader('X-Upstream-Status', String(r.status))
     res.setHeader('X-Upstream-CT', r.headers.get('content-type') || '')
@@ -650,6 +655,7 @@ app.get('/proxy/playlist', async (req, res) => {
     res.status(500).send('error')
   }
 })
+
 app.get('/proxy/segment', async (req, res) => {
   try {
     const token = String(req.query.token || '')
