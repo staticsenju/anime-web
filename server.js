@@ -618,43 +618,61 @@ app.get('/watch/:slug/:episode/master.m3u8', async (req, res) => {
     res.send(rewritten)
   } catch { res.status(500).send('error') }
 })
-app.get('/proxy/playlist', async (req, res) => {
+app.get("/proxy/playlist", async (req, res) => {
   try {
-    const token = String(req.query.token || '')
-    const url = String(req.query.url || '')
-    const ref = String(req.query.ref || '')
-    const t = getToken(token)
-    if (!t) return res.status(403).send('forbidden')
-
-    const ac = new AbortController()
-    const onClose = () => { try { ac.abort() } catch {} }
-    req.on('close', onClose)
-    res.on('close', onClose)
-    res.setHeader('Cache-Control', 'no-store')
+    const token = String(req.query.token || "");
+    const url = String(req.query.url || "");
+    const ref = String(req.query.ref || "");
+    const t = getToken(token);
+    if (!t) return res.status(403).send("forbidden");
 
     const r = await httpGetRaw(url, {
       headers: mergeHeaders(buildUpstreamHeaders({ cookie: t.cookie, ref, req })),
-      redirect: 'follow',
-      signal: ac.signal
-    })
+      redirect: "follow"
+    });
+    const text = await r.text();
+    
+    let rewritten = text.replace(
+      /(CODECS="[^"]*mp4a\.40\.1[^"]*")/g,
+      'CODECS="mp4a.40.2"'
+    );
 
-    let text = await r.text()
+    rewritten = rewritten.replace(
+      /(https?:\/\/[^\s"]+\.m3u8)/g,
+      (match) =>
+        `/proxy/transcode?token=${encodeURIComponent(token)}&url=${encodeURIComponent(match)}&ref=${encodeURIComponent(url)}`
+    );
 
-    let rewritten = rewritePlaylist(text, url, token)
-    rewritten = rewritten.replace(/mp4a\.40\.1/g, 'mp4a.40.2')
-
-    res.setHeader('Content-Type', 'application/vnd.apple.mpegurl')
-    res.setHeader('X-Upstream-Status', String(r.status))
-    res.setHeader('X-Upstream-CT', r.headers.get('content-type') || '')
-    res.setHeader('X-Upstream-URL', url)
-    if (typeof res.flushHeaders === 'function') { try { res.flushHeaders() } catch {} }
-    res.status(r.status).send(rewritten)
+    res.setHeader("Content-Type", "application/vnd.apple.mpegurl");
+    res.status(r.status).send(rewritten);
   } catch (err) {
-    if (err && (err.name === 'AbortError' || err.code === 'ECONNRESET')) return
-    res.status(500).send('error')
+    console.error(err);
+    if (!res.headersSent) res.status(500).send("error");
   }
-})
+});
+app.get("/proxy/transcode", (req, res) => {
+  const url = String(req.query.url || "");
+  if (!url) return res.status(400).send("missing url");
 
+  res.setHeader("Content-Type", "application/vnd.apple.mpegurl");
+
+  const ffmpeg = spawn("ffmpeg", [
+    "-i", url,
+    "-c:v", "copy",
+    "-c:a", "aac",
+    "-ar", "48000"
+    "-ac", "2",
+    "-f", "hls",
+    "-hls_time", "10",       
+    "-hls_list_size", "0",
+    "-hls_flags", "independent_segments",
+    "pipe:1"
+  ]);
+
+  ffmpeg.stdout.pipe(res);
+  ffmpeg.stderr.on("data", (d) => console.error("[ffmpeg]", d.toString()));
+  ffmpeg.on("close", (c) => console.log("ffmpeg closed", c));
+});
 app.get('/proxy/segment', async (req, res) => {
   try {
     const token = String(req.query.token || '')
