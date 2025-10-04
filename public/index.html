@@ -79,6 +79,29 @@ button.primary{background:var(--primary);color:#fff;border:none}
 </div>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 <script>
+  const video = document.getElementById('video')
+  const url = '/proxy/playlist.m3u8?token=...'
+
+if (Hls.isSupported()) {
+  hls = new Hls({ debug: true })
+  hls.loadSource(url)
+  hls.attachMedia(video)
+
+  hls.on(Hls.Events.ERROR, (event, data) => {
+    console.error('[HLS ERROR]', data.type, data.details, data)
+    if (data.response) {
+      console.error('[HLS RESPONSE]', data.response.url, data.response.code, data.response.text)
+    }
+  })
+
+  hls.on(Hls.Events.FRAG_LOADED, (event, data) => {
+    console.log('[HLS FRAG LOADED]', data.frag.relurl, data.frag.duration)
+  })
+}
+
+</script>
+
+<script>
 const q=document.getElementById('q')
 const searchBtn=document.getElementById('search')
 const results=document.getElementById('results')
