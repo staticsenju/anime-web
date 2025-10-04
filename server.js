@@ -662,16 +662,26 @@ app.get('/proxy/segment', async (req, res) => {
     req.on('close', onClose)
     res.on('close', onClose)
     const r = await httpGetRaw(theurl, {
-      headers: mergeHeaders(buildUpstreamHeaders({ cookie: t.cookie, ref, req })),
+      headers: {
+        ...mergeHeaders(buildUpstreamHeaders({ cookie: t.cookie, ref, req })),
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36',
+        'Referer': ref || 'https://vault-13.owocdn.top/'
+      },
       redirect: 'follow',
       signal: ac.signal
     })
+    const ct = r.headers.get('content-type') || ''
+    if (ct.includes('image')) {
+      if (!res.headersSent) res.status(403).end()
+      return
+    }
     pipeFetchResponse(r, res, theurl)
   } catch (err) {
     if (err && (err.name === 'AbortError' || err.code === 'ECONNRESET')) return
     if (!res.headersSent) res.status(502).end()
   }
 })
+
 app.get('/proxy/key', async (req, res) => {
   try {
     const token = String(req.query.token || '')
