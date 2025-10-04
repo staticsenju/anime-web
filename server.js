@@ -655,7 +655,6 @@ app.get('/proxy/playlist', async (req, res) => {
   }
 })
 
-
 app.get('/proxy/segment', async (req, res) => {
   try {
     const token = String(req.query.token || '')
@@ -688,7 +687,6 @@ app.get('/proxy/segment', async (req, res) => {
     if (!res.headersSent) res.status(502).end()
   }
 })
-
 
 app.get('/proxy/key', async (req, res) => {
   try {
