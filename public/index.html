@@ -79,29 +79,6 @@ button.primary{background:var(--primary);color:#fff;border:none}
 </div>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 <script>
-  const video = document.getElementById('video')
-  const url = '/proxy/playlist.m3u8?token=...'
-
-if (Hls.isSupported()) {
-  hls = new Hls({ debug: true })
-  hls.loadSource(url)
-  hls.attachMedia(video)
-
-  hls.on(Hls.Events.ERROR, (event, data) => {
-    console.error('[HLS ERROR]', data.type, data.details, data)
-    if (data.response) {
-      console.error('[HLS RESPONSE]', data.response.url, data.response.code, data.response.text)
-    }
-  })
-
-  hls.on(Hls.Events.FRAG_LOADED, (event, data) => {
-    console.log('[HLS FRAG LOADED]', data.frag.relurl, data.frag.duration)
-  })
-}
-
-</script>
-
-<script>
 const q=document.getElementById('q')
 const searchBtn=document.getElementById('search')
 const results=document.getElementById('results')
@@ -155,7 +132,7 @@ function attachHls(src,startAt=0){
   resetVideo();destroyHls()
   if(Hls.isSupported()){
     hls=new Hls({
-      debug:false,
+      debug:true,
       enableWorker:true,
       lowLatencyMode:false,
       startPosition:0,
@@ -170,18 +147,29 @@ function attachHls(src,startAt=0){
       fragLoadTimeout:120000,
       capLevelToPlayerSize:true
     })
+
     hls.on(Hls.Events.MANIFEST_PARSED,()=>{try{video.currentTime=0}catch{};selectAudioTrackByPref()})
     hls.on(Hls.Events.AUDIO_TRACKS_UPDATED,selectAudioTrackByPref)
     hls.on(Hls.Events.AUDIO_TRACK_SWITCHED,()=>{})
     video.addEventListener('loadedmetadata',()=>{try{video.currentTime=startAt||0}catch{}},{once:true})
-    hls.on(Hls.Events.ERROR,(_e,d)=>{
-      if(d.fatal){
-        if(d.type==='networkError'){hls.startLoad()}
-        else if(d.type==='mediaError'){hls.recoverMediaError()}
+
+    hls.on(Hls.Events.ERROR,(event,data)=>{
+      console.error('[HLS ERROR]', data.type, data.details, data)
+      if (data.response) {
+        console.error('[HLS RESPONSE]', data.response.url, data.response.code, data.response.text)
+      }
+      if(data.fatal){
+        if(data.type==='networkError'){hls.startLoad()}
+        else if(data.type==='mediaError'){hls.recoverMediaError()}
       }else{
-        if(d.details==='bufferStalledError'){hls.startLoad()}
+        if(data.details==='bufferStalledError'){hls.startLoad()}
       }
     })
+
+    hls.on(Hls.Events.FRAG_LOADED,(event,data)=>{
+      console.log('[HLS FRAG LOADED]', data.frag.relurl, data.frag.duration)
+    })
+
     hls.loadSource(src)
     hls.attachMedia(video)
   } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
